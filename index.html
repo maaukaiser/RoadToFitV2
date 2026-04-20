@@ -638,6 +638,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--fg); -webkit-f
     <div class="ai-ctrls">
       <button class="ctrl-arm active" id="arm-btn" onclick="toggleArm()">💪 Brazo Derecho</button>
       <button class="ctrl-reset" onclick="resetAI()">↺ Reset</button>
+      <button class="ctrl-reset" id="flip-cam-btn" onclick="flipCamera()" title="Cambiar cámara">🔄 Cámara</button>
       <button class="ctrl-start-btn" id="ai-start-btn" onclick="toggleAI()">▶ Iniciar</button>
     </div>
   </div>
@@ -1516,7 +1517,9 @@ function toggleAI() {
   if (S.aiRunning) stopAI();
   else startAI();
 }
-function startAI() {
+if (!S.hasOwnProperty('cameraFacing')) S.cameraFacing = 'environment'; // 'user'=frontal, 'environment'=trasera
+
+async function startAI() {
   if (typeof Pose === 'undefined') {
     toast('MediaPipe no cargado. Verifica tu conexión.');
     return;
@@ -1527,16 +1530,35 @@ function startAI() {
   canvas.height = camWrap.offsetHeight;
   S.mpCanvas = canvas;
   S.mpCtx = canvas.getContext('2d');
-  // Create video element
+
+  // Detener stream anterior si existe
+  if (S.mpStream) { S.mpStream.getTracks().forEach(t => t.stop()); S.mpStream = null; }
+
+  // Crear o reutilizar video element
   if (!S.mpVideo) {
     S.mpVideo = document.createElement('video');
     S.mpVideo.setAttribute('playsinline', '');
     S.mpVideo.setAttribute('autoplay', '');
     S.mpVideo.setAttribute('muted', '');
-    S.mpVideo.muted = true; // Forzar mute para iOS
+    S.mpVideo.muted = true;
     S.mpVideo.style.display = 'none';
     document.body.appendChild(S.mpVideo);
   }
+
+  // Pedir acceso a la cámara con facingMode
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: S.cameraFacing, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    S.mpStream = stream;
+    S.mpVideo.srcObject = stream;
+    await S.mpVideo.play();
+  } catch(e) {
+    toast('❌ No se pudo acceder a la cámara: ' + e.message);
+    return;
+  }
+
   // Init Pose
   if (!S.mpPose) {
     S.mpPose = new Pose({
@@ -1551,15 +1573,17 @@ function startAI() {
     });
     S.mpPose.onResults(onPoseResults);
   }
-  // Init Camera
-  S.mpCamera = new Camera(S.mpVideo, {
-    onFrame: async () => {
-      if (S.mpPose && S.aiRunning) await S.mpPose.send({image: S.mpVideo});
-    },
-    width: 640, height: 480
-  });
+
+  // Bucle de análisis frame a frame
   S.aiRunning = true;
-  S.mpCamera.start();
+  const sendFrame = async () => {
+    if (!S.aiRunning) return;
+    if (S.mpPose && S.mpVideo.readyState >= 2) {
+      await S.mpPose.send({ image: S.mpVideo });
+    }
+    requestAnimationFrame(sendFrame);
+  };
+  sendFrame();
   document.getElementById('cam-ph').style.opacity = '0';
   document.getElementById('ai-dot').classList.add('on');
   document.getElementById('ai-start-btn').textContent = '⏹ Detener';
@@ -1582,6 +1606,8 @@ function startAI() {
 function stopAI() {
   S.aiRunning = false;
   clearInterval(S.aiPlanchaTimer);
+  // Detener stream de cámara
+  if (S.mpStream) { S.mpStream.getTracks().forEach(t => t.stop()); S.mpStream = null; }
   if (S.mpCamera) { S.mpCamera.stop(); S.mpCamera = null; }
   document.getElementById('cam-ph').style.opacity = '1';
   document.getElementById('ai-dot').classList.remove('on');
@@ -1589,6 +1615,25 @@ function stopAI() {
   document.getElementById('ai-start-btn').classList.remove('running');
   document.getElementById('cam-hud').style.display = 'none';
 }
+
+async function flipCamera() {
+  // Alternar entre cámara trasera y frontal
+  S.cameraFacing = (S.cameraFacing === 'environment') ? 'user' : 'environment';
+  const label = S.cameraFacing === 'environment' ? '📷 Trasera' : '🤳 Frontal';
+  toast(`Cambiando a cámara ${S.cameraFacing === 'environment' ? 'trasera' : 'frontal'}...`);
+  document.getElementById('flip-cam-btn').textContent = `🔄 ${label}`;
+  
+  if (S.aiRunning) {
+    // Reiniciar con la nueva cámara sin perder el conteo
+    const savedReps = S.aiReps;
+    stopAI();
+    await new Promise(r => setTimeout(r, 300)); // pequeña pausa
+    await startAI();
+    S.aiReps = savedReps; // recuperar reps
+    updateAIUI();
+  }
+}
+
 function closeAI() {
   stopAI();
   closeOverlay('ov-ai');
