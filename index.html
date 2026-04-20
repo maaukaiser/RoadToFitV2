@@ -748,8 +748,8 @@ const AI_CONFIG = {
   curl_bicep: {
     name:'Curl de Bíceps', emoji:'💪',
     joints:{ RIGHT:[12,14,16], LEFT:[11,13,15] }, // shoulder,elbow,wrist
-    angleDown:155, angleUp:55,
-    downFrames:4, upFrames:3,
+    angleDown:145, angleUp:60,   // más tolerante: start zone > 145°, target zone < 60°
+    downFrames:2, upFrames:2,    // respuesta rápida
     feedDown:'⬇️ Baja el brazo completamente',
     feedUp:'⬆️ ¡Sube y aprieta el bíceps!',
     feedGood:'✅ ¡Buena contracción!',
@@ -1548,11 +1548,11 @@ async function startAI() {
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
     S.mpPose.setOptions({
-      modelComplexity: 1,
+      modelComplexity: 2,          // Máximo: detecta mejor en cualquier ángulo
       smoothLandmarks: true,
       enableSegmentation: false,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
+      minDetectionConfidence: 0.35, // Más permisivo: detecta más rápido
+      minTrackingConfidence: 0.35,  // No pierde el tracking tan fácil
     });
     S.mpPose.onResults(onPoseResults);
   }
