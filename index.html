@@ -1620,19 +1620,52 @@ async function flipCamera() {
   // Alternar entre cámara trasera y frontal
   S.cameraFacing = (S.cameraFacing === 'environment') ? 'user' : 'environment';
   const label = S.cameraFacing === 'environment' ? '📷 Trasera' : '🤳 Frontal';
-  toast(`Cambiando a cámara ${S.cameraFacing === 'environment' ? 'trasera' : 'frontal'}...`);
-  document.getElementById('flip-cam-btn').textContent = `🔄 ${label}`;
-  
-  if (S.aiRunning) {
-    // Reiniciar con la nueva cámara sin perder el conteo
-    const savedReps = S.aiReps;
-    stopAI();
-    await new Promise(r => setTimeout(r, 300)); // pequeña pausa
-    await startAI();
-    S.aiReps = savedReps; // recuperar reps
-    updateAIUI();
+  const btn = document.getElementById('flip-cam-btn');
+  if (btn) btn.textContent = `🔄 ${label}`;
+
+  // Detener el stream ACTUAL pero NO el bucle de análisis
+  if (S.mpStream) {
+    S.mpStream.getTracks().forEach(t => t.stop());
+    S.mpStream = null;
+  }
+
+  // Pedir nuevo stream con la facingMode actualizada
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { exact: S.cameraFacing }, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    S.mpStream = newStream;
+
+    if (S.mpVideo) {
+      S.mpVideo.pause();
+      S.mpVideo.srcObject = newStream;
+      await S.mpVideo.play();
+    }
+
+    toast(`Cámara ${S.cameraFacing === 'environment' ? 'trasera' : 'frontal'} activa`);
+  } catch (e) {
+    // Fallback: si "exact" falla (algunos Android) intentar sin exact
+    try {
+      const fallback = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: S.cameraFacing },
+        audio: false
+      });
+      S.mpStream = fallback;
+      if (S.mpVideo) {
+        S.mpVideo.pause();
+        S.mpVideo.srcObject = fallback;
+        await S.mpVideo.play();
+      }
+      toast(`Cámara ${S.cameraFacing === 'environment' ? 'trasera' : 'frontal'} activa`);
+    } catch(e2) {
+      toast('❌ No se pudo cambiar la cámara: ' + e2.message);
+      // Revertir el cambio de estado
+      S.cameraFacing = (S.cameraFacing === 'environment') ? 'user' : 'environment';
+    }
   }
 }
+
 
 function closeAI() {
   stopAI();
