@@ -1531,6 +1531,9 @@ function startAI() {
   if (!S.mpVideo) {
     S.mpVideo = document.createElement('video');
     S.mpVideo.setAttribute('playsinline', '');
+    S.mpVideo.setAttribute('autoplay', '');
+    S.mpVideo.setAttribute('muted', '');
+    S.mpVideo.muted = true; // Forzar mute para iOS
     S.mpVideo.style.display = 'none';
     document.body.appendChild(S.mpVideo);
   }
