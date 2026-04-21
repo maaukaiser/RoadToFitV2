@@ -237,10 +237,16 @@ body { font-family:var(--font); background:var(--bg); color:var(--fg); -webkit-f
 .ov-body { flex:1;overflow-y:auto;padding:0 20px 40px; }
 .wo-title-inp { width:100%;font-size:20px;font-family:var(--font);font-weight:700;background:none;border:none;color:var(--fg);outline:none;margin-bottom:16px;padding:4px 0; }
 
-.wo-ex-card { background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px; }
-.wo-ex-hd { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px; }
-.wo-ex-nm { font-size:14px;font-weight:600; }
+.wo-ex-card { background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;transition:transform .15s,box-shadow .15s; }
+.wo-ex-hd { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
+.wo-ex-nm { font-size:14px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.wo-ex-actions { display:flex;align-items:center;gap:4px;flex-shrink:0; }
 .add-set { background:none;border:none;color:var(--accent);font-size:12px;font-family:var(--font);font-weight:600;cursor:pointer; }
+.ex-ord-btn { width:28px;height:28px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--fg2);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0; }
+.ex-ord-btn:active { background:var(--bg4);color:var(--fg); }
+.ex-ord-btn:disabled { opacity:.25;cursor:default; }
+.ex-del-btn { width:28px;height:28px;border-radius:8px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);color:var(--danger);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0; }
+.ex-del-btn:active { background:rgba(248,113,113,.2); }
 
 .sets-tbl { width:100%;border-collapse:collapse; }
 .sets-tbl th { font-size:10px;color:var(--fg3);text-transform:uppercase;font-weight:600;padding:0 0 8px;text-align:center; }
@@ -1283,11 +1289,17 @@ function pushExToWo(ex) {
 function renderWoEx() {
   const list = document.getElementById('wo-ex-list');
   if (!list || !S.activeWo) return;
+  const total = S.activeWo.exercises.length;
   list.innerHTML = S.activeWo.exercises.map((ex, ei) => `
     <div class="wo-ex-card">
       <div class="wo-ex-hd">
         <div class="wo-ex-nm">${ex.icon} ${ex.name}</div>
-        <button class="add-set" onclick="addSet(${ei})">+ Serie</button>
+        <div class="wo-ex-actions">
+          <button class="ex-ord-btn" onclick="moveEx(${ei},-1)" title="Mover arriba" ${ei === 0 ? 'disabled' : ''}>↑</button>
+          <button class="ex-ord-btn" onclick="moveEx(${ei},1)" title="Mover abajo" ${ei === total-1 ? 'disabled' : ''}>↓</button>
+          <button class="add-set" onclick="addSet(${ei})">+ Serie</button>
+          <button class="ex-del-btn" onclick="removeEx(${ei})" title="Eliminar ejercicio">✕</button>
+        </div>
       </div>
       <table class="sets-tbl">
         <tr><th>#</th><th>Reps</th><th>Peso kg</th></tr>
@@ -1301,6 +1313,20 @@ function renderWoEx() {
 }
 function addSet(ei) { S.activeWo.exercises[ei].sets.push({reps:'',weight:''}); renderWoEx(); }
 function updSet(ei, si, field, val) { if (S.activeWo) S.activeWo.exercises[ei].sets[si][field] = val; }
+function moveEx(ei, dir) {
+  const exs = S.activeWo.exercises;
+  const newIdx = ei + dir;
+  if (newIdx < 0 || newIdx >= exs.length) return;
+  [exs[ei], exs[newIdx]] = [exs[newIdx], exs[ei]];
+  renderWoEx();
+}
+function removeEx(ei) {
+  const ex = S.activeWo.exercises[ei];
+  if (!confirm(`¿Eliminar "${ex.name}" de la rutina?`)) return;
+  S.activeWo.exercises.splice(ei, 1);
+  renderWoEx();
+  toast(`🗑️ ${ex.name} eliminado`);
+}
 async function finishWorkout() {
   clearInterval(S.wTimer);
   if (!S.activeWo) return;
